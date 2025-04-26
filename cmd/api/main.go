@@ -1,3 +1,8 @@
+// @title Webhook Delivery Service API
+// @version 1.0
+// @description API Documentation for Webhook Delivery System
+// @host localhost:8080
+// @BasePath /
 package main
 
 import (
@@ -7,12 +12,14 @@ import (
 	"os/signal"
 	"syscall"
 
+	_ "github.com/Miku7676/webhook-delivery-service/docs"
 	"github.com/Miku7676/webhook-delivery-service/handlers"
-	"github.com/Miku7676/webhook-delivery-service/helpers"
 	"github.com/Miku7676/webhook-delivery-service/models"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"github.com/joho/godotenv"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
@@ -59,10 +66,11 @@ func main() {
 		RedisClient: redisClient,
 	}
 
-	go helpers.StartWorker(redisClient) //go routine
-	go helpers.StartLogClean(database)
+	// go helpers.StartWorker(redisClient) //go routine
+	// go helpers.StartLogClean(database)
 
 	r := gin.Default()
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "up"})

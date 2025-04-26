@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/Miku7676/webhook-delivery-service/models"
@@ -13,15 +14,22 @@ import (
 	"gorm.io/gorm"
 )
 
-// type WebhookTask struct {
-// 	ID             uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
-// 	SubscriptionID uuid.UUID `gorm:"type:uuid" json:"subscription_id"`
-// 	Payload        string    `json:"payload"`
-// 	CreatedAt      time.Time `json:"created_at"`
-// }
-
+// IngestWebhook godoc
+// @Summary Ingest a webhook
+// @Description Accepts a webhook payload and queues it for delivery
+// @Tags Webhook
+// @Accept  json
+// @Produce  json
+// @Param subscription_id path string true "Subscription ID"
+// @Param payload body object true "Webhook Payload"
+// @Success 202 {object} map[string]string
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /ingest/{subscription_id} [post]
 func IngestWebhook(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		redisUrl := os.Getenv("REDIS_URL")
+
 		subID := c.Param("subscription_id")
 		var payload map[string]interface{}
 		if err := c.ShouldBindJSON(&payload); err != nil {
@@ -49,7 +57,7 @@ func IngestWebhook(db *gorm.DB) gin.HandlerFunc {
 		}
 		db.Create(&task)
 
-		client := asynq.NewClient(asynq.RedisClientOpt{Addr: "localhost:6379"}) //change to the docker container name
+		client := asynq.NewClient(asynq.RedisClientOpt{Addr: redisUrl}) //change to the docker container name
 		defer client.Close()
 
 		jobPayload, _ := json.Marshal(task)

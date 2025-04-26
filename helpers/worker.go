@@ -24,11 +24,12 @@ type WorkerDependencies struct {
 }
 
 func StartWorker(rdb *redis.Client) {
+	redisUrl := os.Getenv("REDIS_URL")
 	deps := &WorkerDependencies{
 		RedisClient: rdb,
 	}
 
-	redisOpt := asynq.RedisClientOpt{Addr: "localhost:6379"} // change to docker container name
+	redisOpt := asynq.RedisClientOpt{Addr: redisUrl} // change to docker container name
 	srv := asynq.NewServer(
 		redisOpt,
 		asynq.Config{
@@ -62,12 +63,6 @@ func (wd *WorkerDependencies) processWebhookTask(ctx context.Context, task *asyn
 		return err
 	}
 
-	// var sub models.Subscription
-	// if err := database.First(&sub, "id = ?", webhookTask.SubscriptionID).Error; err != nil {
-	// 	log.Printf("Subscription not found: %v", err)
-	// 	return err
-	// }
-
 	var sub models.Subscription
 	cacheKey := fmt.Sprintf("subscription:%s", webhookTask.SubscriptionID)
 
@@ -95,7 +90,7 @@ func (wd *WorkerDependencies) processWebhookTask(ctx context.Context, task *asyn
 	if err != nil {
 		log.Printf("Request creation failed: %v", err)
 		retryCount, _ := asynq.GetRetryCount(ctx)
-		logAttempt(database, webhookTask, sub, retryCount+1, "Failed", 500, err.Error()) // server error failed to create
+		logAttempt(database, webhookTask, sub, retryCount+1, "Failed", 500, err.Error()) // server error, failed to create
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -140,37 +135,3 @@ func logAttempt(db *gorm.DB, task models.WebhookTask, sub models.Subscription, a
 		log.Printf("Failed to log delivery attempt: %v", err)
 	}
 }
-
-// func updateBackoff(n int, err error, task *asynq.Task) time.Duration {
-// 	// switch n {
-// 	// case 1:
-// 	// 	return 10 * time.Second
-// 	// case 2:
-// 	// 	return 30 * time.Second
-// 	// case 3:
-// 	// 	return 1 * time.Minute
-// 	// case 4:
-// 	// 	return 5 * time.Minute
-// 	// case 5:
-// 	// 	return 15 * time.Minute
-// 	// default:
-// 	// 	return 15 * time.Minute
-// 	// }
-// 	durations := []time.Duration{
-// 		10 * time.Second, // 1st retry
-// 		30 * time.Second, // 2nd retry
-// 		1 * time.Minute,  // 3rd retry
-// 		5 * time.Minute,  // 4th retry
-// 		15 * time.Minute, // 5th retry and beyond
-// 	}
-
-// 	if n <= 0 {
-// 		return 0
-// 	}
-
-// 	if n <= len(durations) {
-// 		return durations[n-1]
-// 	}
-
-// 	return durations[len(durations)-1]
-// }

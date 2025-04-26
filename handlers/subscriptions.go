@@ -18,14 +18,29 @@ type HandlerDependencies struct {
 	RedisClient *redis.Client
 }
 
+// CreateSubscription godoc
+// @Summary Create a new subscription
+// @Description Creates a subscription with a target URL and optional secret
+// @Tags Subscriptions
+// @Accept json
+// @Produce json
+// @Param subscription body models.CreateSubscriptionRequest true "Create Subscription Request Body"
+// @Success 201 {object} models.Subscription
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /subscriptions [post]
 func (h *HandlerDependencies) CreateSubscription() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var sub models.Subscription
-		if err := c.ShouldBindJSON(&sub); err != nil {
+		var req models.CreateSubscriptionRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		sub.ID = uuid.New()
+		sub := models.Subscription{
+			ID:        uuid.New(),
+			TargetURL: req.TargetURL,
+			Secret:    req.Secret,
+		}
 		if err := h.DB.Create(&sub).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -34,6 +49,15 @@ func (h *HandlerDependencies) CreateSubscription() gin.HandlerFunc {
 	}
 }
 
+// GetSubscription godoc
+// @Summary Get a subscription
+// @Description Retrieves a subscription by ID
+// @Tags Subscriptions
+// @Produce json
+// @Param id path string true "Subscription ID"
+// @Success 200 {object} models.Subscription
+// @Failure 404 {object} map[string]string
+// @Router /subscriptions/{id} [get]
 func (h *HandlerDependencies) GetSubscription() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
@@ -46,6 +70,18 @@ func (h *HandlerDependencies) GetSubscription() gin.HandlerFunc {
 	}
 }
 
+// UpdateSubscription godoc
+// @Summary Update a subscription
+// @Description Updates the target URL or secret of a subscription
+// @Tags Subscriptions
+// @Accept json
+// @Produce json
+// @Param id path string true "Subscription ID"
+// @Param subscription body models.Subscription true "Updated Subscription object"
+// @Success 200 {object} models.Subscription
+// @Failure 400 {object} map[string]string
+// @Failure 404 {object} map[string]string
+// @Router /subscriptions/{id} [put]
 func (h *HandlerDependencies) UpdateSubscription() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
@@ -72,6 +108,14 @@ func (h *HandlerDependencies) UpdateSubscription() gin.HandlerFunc {
 	}
 }
 
+// DeleteSubscription godoc
+// @Summary Delete a subscription
+// @Description Deletes a subscription by ID
+// @Tags Subscriptions
+// @Param id path string true "Subscription ID"
+// @Success 204 "No Content"
+// @Failure 404 {object} map[string]string
+// @Router /subscriptions/{id} [delete]
 func (h *HandlerDependencies) DeleteSubscription() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")

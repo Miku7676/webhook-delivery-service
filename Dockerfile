@@ -1,13 +1,27 @@
-FROM golang:1.24-alpine
+# Stage 1: Build binaries
+FROM golang:1.24-alpine AS builder
 
 WORKDIR /app
 
-COPY go.mod go.sum /app/
+COPY go.mod go.sum ./
 RUN go mod download
 
-COPY . /app/
+COPY . .
 
-RUN go build -o webhook-service /app/
+# Build API binary
+RUN go build -o /api ./cmd/api
+
+# Build Worker binary
+RUN go build -o /worker ./cmd/worker
+
+# Stage 2: Run
+FROM alpine:latest
+
+WORKDIR /app
+
+COPY --from=builder /api /api
+COPY --from=builder /worker /worker
 
 EXPOSE 8080
-CMD ["./webhook-service"]
+
+CMD ["/api"]

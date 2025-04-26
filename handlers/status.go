@@ -9,6 +9,16 @@ import (
 	"gorm.io/gorm"
 )
 
+// GetDeliveryStatusByWebhook godoc
+// @Summary Get delivery status for a webhook
+// @Description Fetches all delivery attempts for a specific webhook ID
+// @Tags Status
+// @Produce json
+// @Param webhook_id path string true "Webhook Task ID"
+// @Success 200 {array} models.DeliveryLog
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /status/{webhook_id} [get]
 func GetDeliveryStatusByWebhook(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		webhookID := c.Param("webhook_id")
@@ -29,6 +39,16 @@ func GetDeliveryStatusByWebhook(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
+// GetRecentLogsBySubscription godoc
+// @Summary Get recent delivery logs for a subscription
+// @Description Lists the last 20 delivery attempts for a subscription
+// @Tags Status
+// @Produce json
+// @Param id path string true "Subscription ID"
+// @Success 200 {array} models.DeliveryLog
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /subscriptions/{id}/logs [get]
 func GetRecentLogsBySubscription(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		subID := c.Param("id")
