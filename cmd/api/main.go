@@ -6,12 +6,9 @@
 package main
 
 import (
-	"fmt"
 	"log"
-	"os"
-	"os/signal"
-	"syscall"
 
+	"github.com/Miku7676/webhook-delivery-service/config"
 	_ "github.com/Miku7676/webhook-delivery-service/docs"
 	"github.com/Miku7676/webhook-delivery-service/handlers"
 	"github.com/Miku7676/webhook-delivery-service/models"
@@ -33,46 +30,45 @@ import (
 
 func main() {
 
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
-
-	// Run a goroutine to handle shutdown
-	go func() {
-		<-c
-		fmt.Println("Shutting down...")
-		os.Exit(0)
-	}()
-
 	// Load env vars
 	err := godotenv.Load()
 	if err != nil {
 		log.Println("No .env file found.")
 	}
 
-	dburl := os.Getenv("DB_URL")
+	// Load centralized configuration
+	cfg := config.Load()
+
+	// Connect to Database
+	dburl := cfg.DBURL
 	database, err := gorm.Open(postgres.Open(dburl), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
-	database.AutoMigrate(&models.Subscription{}, &models.WebhookTask{}, &models.DeliveryLog{})
+	// AutoMigrate models
+	if err := database.AutoMigrate(&models.Subscription{}, &models.WebhookTask{}, &models.DeliveryLog{}); err != nil {
+		log.Fatalf("Failed to automigrate models: %v", err)
+	}
 
-	//redis
-	redisClient := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379", // Local Redis
-	})
+	// Parse Redis URL properly (handles Upstash rediss://)
+	redisOpt, err := redis.ParseURL(cfg.RedisURL)
+	if err != nil {
+		log.Fatalf("Failed to parse Redis URL: %v", err)
+	}
+	redisClient := redis.NewClient(redisOpt)
 
+	// Setup Handler Dependencies
 	dependencyHandler := &handlers.HandlerDependencies{
 		DB:          database,
 		RedisClient: redisClient,
 	}
 
-	// go helpers.StartWorker(redisClient) //go routine
-	// go helpers.StartLogClean(database)
-
+	// Setup Gin Router
 	r := gin.Default()
-	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler)) // Swagger UI
 
-	r.GET("/health", func(c *gin.Context) {
+	// Health Check
+	r.GET("/healthz", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "up"})
 	})
 
@@ -85,7 +81,7 @@ func main() {
 	r.GET("/status/:webhook_id", handlers.GetDeliveryStatusByWebhook(database))
 	r.GET("/subscriptions/:id/logs", handlers.GetRecentLogsBySubscription(database))
 
-	port := os.Getenv("PORT")
+	port := cfg.Port
 	if port == "" {
 		port = "8080"
 	}

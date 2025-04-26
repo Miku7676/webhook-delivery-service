@@ -3,8 +3,10 @@ package helpers
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -25,11 +27,29 @@ type WorkerDependencies struct {
 
 func StartWorker(rdb *redis.Client) {
 	redisUrl := os.Getenv("REDIS_URL")
+	if redisUrl == "" {
+		log.Fatal("REDIS_URL environment variable not set")
+	}
+
+	opt, err := redis.ParseURL(redisUrl)
+	if err != nil {
+		log.Fatalf("Failed to parse Redis URL: %v", err)
+	}
+
+	redisOpt := asynq.RedisClientOpt{
+		Addr:     opt.Addr,
+		Username: opt.Username,
+		Password: opt.Password,
+		TLSConfig: &tls.Config{
+			InsecureSkipVerify: false,
+		},
+		DB: opt.DB,
+	}
+
 	deps := &WorkerDependencies{
 		RedisClient: rdb,
 	}
 
-	redisOpt := asynq.RedisClientOpt{Addr: redisUrl} // change to docker container name
 	srv := asynq.NewServer(
 		redisOpt,
 		asynq.Config{
@@ -90,7 +110,7 @@ func (wd *WorkerDependencies) processWebhookTask(ctx context.Context, task *asyn
 	if err != nil {
 		log.Printf("Request creation failed: %v", err)
 		retryCount, _ := asynq.GetRetryCount(ctx)
-		logAttempt(database, webhookTask, sub, retryCount+1, "Failed", 500, err.Error()) // server error, failed to create
+		logAttempt(database, webhookTask, sub, retryCount+1, "Failed", 500, err.Error()) // server error, failed to create request
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -105,12 +125,19 @@ func (wd *WorkerDependencies) processWebhookTask(ctx context.Context, task *asyn
 	defer resp.Body.Close()
 
 	status := "Success"
+	errorMessage := ""
 	if resp.StatusCode >= 300 {
 		status = "Failed"
+
+		// Read body (optional, but useful for debugging why it failed)
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		errorMessage = fmt.Sprintf("HTTP %d: %s", resp.StatusCode, string(bodyBytes))
+
+		log.Printf("Received non-2xx response: %s", errorMessage)
 	}
 
 	retryCount, _ := asynq.GetRetryCount(ctx)
-	logAttempt(database, webhookTask, sub, retryCount+1, status, resp.StatusCode, "")
+	logAttempt(database, webhookTask, sub, retryCount+1, status, resp.StatusCode, errorMessage)
 	if status == "Failed" {
 		return fmt.Errorf("Non-2xx status code: %d", resp.StatusCode)
 	}

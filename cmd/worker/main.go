@@ -2,8 +2,9 @@ package main
 
 import (
 	"log"
-	"os"
+	"net/http"
 
+	"github.com/Miku7676/webhook-delivery-service/config"
 	"github.com/Miku7676/webhook-delivery-service/helpers"
 	"github.com/go-redis/redis/v8"
 	"github.com/joho/godotenv"
@@ -17,12 +18,15 @@ func main() {
 		log.Println("No .env file found.")
 	}
 
-	redisUrl := os.Getenv("REDIS_URL")
-	redisClient := redis.NewClient(&redis.Options{
-		Addr: redisUrl,
-	})
+	cfg := config.Load()
 
-	dburl := os.Getenv("DB_URL")
+	opt, err := redis.ParseURL(cfg.RedisURL)
+	if err != nil {
+		log.Fatalf("Failed to parse Redis URL: %v", err)
+	}
+	redisClient := redis.NewClient(opt)
+
+	dburl := cfg.DBURL
 	database, err := gorm.Open(postgres.Open(dburl), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
@@ -32,6 +36,17 @@ func main() {
 
 	go helpers.StartWorker(redisClient)
 	go helpers.StartLogClean(database)
+
+	go func() {
+		http.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("ok"))
+		})
+		log.Println("Health server running at :9090/health")
+		if err := http.ListenAndServe(":9090", nil); err != nil {
+			log.Fatalf("Failed to start health server: %v", err)
+		}
+	}()
 
 	select {}
 }

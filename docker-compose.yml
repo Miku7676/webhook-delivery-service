@@ -1,11 +1,13 @@
 services:
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     ports:
       - "6379:6379"
 
   db:
     image: postgres:15
+    restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: thepassword
@@ -15,6 +17,7 @@ services:
 
   api:
     build: .
+    restart: unless-stopped
     depends_on:
       - db
       - redis
@@ -25,10 +28,10 @@ services:
       - PORT=8080
       - REDIS_URL=redis:6379
     command: ["/api"]
-    restart: always
 
   worker:
     build: .
+    restart: unless-stopped
     depends_on:
       - db
       - redis
@@ -36,7 +39,6 @@ services:
       - DB_URL=postgres://postgres:thepassword@db:5432/webhook_service?sslmode=disable
       - REDIS_URL=redis:6379
     command: ["/worker"]
-    restart: always
 
 volumes:
   pgdata:
