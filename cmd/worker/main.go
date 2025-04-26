@@ -42,7 +42,7 @@ func main() {
 			w.WriteHeader(http.StatusOK)
 			w.Write([]byte("ok"))
 		})
-		log.Println("Health server running at :9090/health")
+		log.Println("Health server running at :9090/healthz")
 		if err := http.ListenAndServe(":9090", nil); err != nil {
 			log.Fatalf("Failed to start health server: %v", err)
 		}

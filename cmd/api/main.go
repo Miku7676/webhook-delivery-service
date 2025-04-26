@@ -12,6 +12,7 @@ import (
 	_ "github.com/Miku7676/webhook-delivery-service/docs"
 	"github.com/Miku7676/webhook-delivery-service/handlers"
 	"github.com/Miku7676/webhook-delivery-service/models"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
 	"github.com/joho/godotenv"
@@ -65,6 +66,16 @@ func main() {
 
 	// Setup Gin Router
 	r := gin.Default()
+
+	// Add CORS middleware
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"*"}, // Allow all for now (can restrict later)
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "X-Hub-Signature-256"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+	}))
+
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler)) // Swagger UI
 
 	// Health Check
