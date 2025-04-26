@@ -1,24 +1,55 @@
-package main
+package helpers
 
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/Miku7676/webhook-delivery-service/models"
+	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
-func startWorker() {
-	redisOpt := asynq.RedisClientOpt{Addr: "localhost:6379"} // Adjust if docker container name is different
+// var redisClient *redis.Client
+type WorkerDependencies struct {
+	RedisClient *redis.Client
+}
+
+func StartWorker(rdb *redis.Client) {
+	redisUrl := os.Getenv("REDIS_URL")
+	if redisUrl == "" {
+		log.Fatal("REDIS_URL environment variable not set")
+	}
+
+	opt, err := redis.ParseURL(redisUrl)
+	if err != nil {
+		log.Fatalf("Failed to parse Redis URL: %v", err)
+	}
+
+	redisOpt := asynq.RedisClientOpt{
+		Addr:     opt.Addr,
+		Username: opt.Username,
+		Password: opt.Password,
+		TLSConfig: &tls.Config{
+			InsecureSkipVerify: false,
+		},
+		DB: opt.DB,
+	}
+
+	deps := &WorkerDependencies{
+		RedisClient: rdb,
+	}
+
 	srv := asynq.NewServer(
 		redisOpt,
 		asynq.Config{
@@ -31,14 +62,14 @@ func startWorker() {
 	)
 
 	mux := asynq.NewServeMux()
-	mux.HandleFunc("webhook:deliver", processWebhookTask)
+	mux.HandleFunc("webhook:deliver", deps.processWebhookTask)
 
 	if err := srv.Run(mux); err != nil {
 		log.Fatalf("Could not run worker server: %v", err)
 	}
 }
 
-func processWebhookTask(ctx context.Context, task *asynq.Task) error {
+func (wd *WorkerDependencies) processWebhookTask(ctx context.Context, task *asynq.Task) error {
 	var webhookTask models.WebhookTask
 	if err := json.Unmarshal(task.Payload(), &webhookTask); err != nil {
 		log.Printf("Failed to unmarshal task payload: %v", err)
@@ -53,9 +84,25 @@ func processWebhookTask(ctx context.Context, task *asynq.Task) error {
 	}
 
 	var sub models.Subscription
-	if err := database.First(&sub, "id = ?", webhookTask.SubscriptionID).Error; err != nil {
-		log.Printf("Subscription not found: %v", err)
+	cacheKey := fmt.Sprintf("subscription:%s", webhookTask.SubscriptionID)
+
+	val, err := wd.RedisClient.Get(ctx, cacheKey).Result()
+	if err == redis.Nil {
+		// Cache miss - fetch from DB
+		if err := database.First(&sub, "id = ?", webhookTask.SubscriptionID).Error; err != nil {
+			log.Printf("Subscription not found: %v", err)
+			return err
+		}
+
+		// Cache it
+		subBytes, _ := json.Marshal(sub)
+		wd.RedisClient.Set(ctx, cacheKey, subBytes, time.Hour)
+	} else if err != nil {
+		log.Printf("Failed to get subscription from cache: %v", err)
 		return err
+	} else {
+		// Cache hit
+		json.Unmarshal([]byte(val), &sub)
 	}
 
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -63,7 +110,7 @@ func processWebhookTask(ctx context.Context, task *asynq.Task) error {
 	if err != nil {
 		log.Printf("Request creation failed: %v", err)
 		retryCount, _ := asynq.GetRetryCount(ctx)
-		logAttempt(database, webhookTask, sub, retryCount+1, "Failed", 0, err.Error())
+		logAttempt(database, webhookTask, sub, retryCount+1, "Failed", 500, err.Error()) // server error, failed to create request
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -72,18 +119,25 @@ func processWebhookTask(ctx context.Context, task *asynq.Task) error {
 	if err != nil {
 		log.Printf("Delivery failed: %v", err)
 		retryCount, _ := asynq.GetRetryCount(ctx)
-		logAttempt(database, webhookTask, sub, retryCount+1, "Failed", 0, err.Error())
+		logAttempt(database, webhookTask, sub, retryCount+1, "Failed", 404, err.Error()) // assumed that the url does not exist
 		return err
 	}
 	defer resp.Body.Close()
 
 	status := "Success"
+	errorMessage := ""
 	if resp.StatusCode >= 300 {
 		status = "Failed"
+
+		// Read body (optional, but useful for debugging why it failed)
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		errorMessage = fmt.Sprintf("HTTP %d: %s", resp.StatusCode, string(bodyBytes))
+
+		log.Printf("Received non-2xx response: %s", errorMessage)
 	}
 
 	retryCount, _ := asynq.GetRetryCount(ctx)
-	logAttempt(database, webhookTask, sub, retryCount+1, status, resp.StatusCode, "")
+	logAttempt(database, webhookTask, sub, retryCount+1, status, resp.StatusCode, errorMessage)
 	if status == "Failed" {
 		return fmt.Errorf("Non-2xx status code: %d", resp.StatusCode)
 	}
@@ -108,37 +162,3 @@ func logAttempt(db *gorm.DB, task models.WebhookTask, sub models.Subscription, a
 		log.Printf("Failed to log delivery attempt: %v", err)
 	}
 }
-
-// func updateBackoff(n int, err error, task *asynq.Task) time.Duration {
-// 	// switch n {
-// 	// case 1:
-// 	// 	return 10 * time.Second
-// 	// case 2:
-// 	// 	return 30 * time.Second
-// 	// case 3:
-// 	// 	return 1 * time.Minute
-// 	// case 4:
-// 	// 	return 5 * time.Minute
-// 	// case 5:
-// 	// 	return 15 * time.Minute
-// 	// default:
-// 	// 	return 15 * time.Minute
-// 	// }
-// 	durations := []time.Duration{
-// 		10 * time.Second, // 1st retry
-// 		30 * time.Second, // 2nd retry
-// 		1 * time.Minute,  // 3rd retry
-// 		5 * time.Minute,  // 4th retry
-// 		15 * time.Minute, // 5th retry and beyond
-// 	}
-
-// 	if n <= 0 {
-// 		return 0
-// 	}
-
-// 	if n <= len(durations) {
-// 		return durations[n-1]
-// 	}
-
-// 	return durations[len(durations)-1]
-// }
