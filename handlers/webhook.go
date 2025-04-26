@@ -6,18 +6,19 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Miku7676/webhook-delivery-service/models"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
 	"gorm.io/gorm"
 )
 
-type WebhookTask struct {
-	ID             uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
-	SubscriptionID uuid.UUID `gorm:"type:uuid" json:"subscription_id"`
-	Payload        string    `json:"payload"`
-	CreatedAt      time.Time `json:"created_at"`
-}
+// type WebhookTask struct {
+// 	ID             uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
+// 	SubscriptionID uuid.UUID `gorm:"type:uuid" json:"subscription_id"`
+// 	Payload        string    `json:"payload"`
+// 	CreatedAt      time.Time `json:"created_at"`
+// }
 
 func IngestWebhook(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -40,7 +41,7 @@ func IngestWebhook(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
-		task := WebhookTask{
+		task := models.WebhookTask{
 			ID:             uuid.New(),
 			SubscriptionID: parsedID,
 			Payload:        string(body),
@@ -54,9 +55,13 @@ func IngestWebhook(db *gorm.DB) gin.HandlerFunc {
 		jobPayload, _ := json.Marshal(task)
 		job := asynq.NewTask("webhook:deliver", jobPayload)
 
-		_, err = client.Enqueue(job, asynq.Queue("default"))
+		_, err = client.Enqueue(job,
+			asynq.Queue("default"),
+			asynq.MaxRetry(5),
+			asynq.Timeout(10*time.Second),
+		) //asynq.Retention(24*time.Hour),
 		if err != nil {
-			log.Fatal(err)
+			log.Printf("Failed to enqueue task: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to enqueue task"})
 			return
 		}

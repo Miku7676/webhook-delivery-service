@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 
+	"github.com/Miku7676/webhook-delivery-service/models"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -12,15 +13,15 @@ type Handler struct {
 	*gorm.DB
 }
 
-type Subscription struct {
-	ID        uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
-	TargetURL string    `json:"target_url" binding:"required"`
-	Secret    string    `json:"secret"`
-}
+// type Subscription struct {
+// 	ID        uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
+// 	TargetURL string    `json:"target_url" binding:"required"`
+// 	Secret    string    `json:"secret"`
+// }
 
 func CreateSubscription(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var sub Subscription
+		var sub models.Subscription
 		if err := c.ShouldBindJSON(&sub); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -37,7 +38,7 @@ func CreateSubscription(db *gorm.DB) gin.HandlerFunc {
 func GetSubscription(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
-		var sub Subscription
+		var sub models.Subscription
 		if err := db.First(&sub, "id = ?", id).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Subscription not found"})
 			return
@@ -49,12 +50,12 @@ func GetSubscription(db *gorm.DB) gin.HandlerFunc {
 func UpdateSubscription(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
-		var sub Subscription
+		var sub models.Subscription
 		if err := db.First(&sub, "id = ?", id).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Subscription not found"})
 			return
 		}
-		var updateData Subscription
+		var updateData models.Subscription
 		if err := c.ShouldBindJSON(&updateData); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -69,7 +70,7 @@ func UpdateSubscription(db *gorm.DB) gin.HandlerFunc {
 func DeleteSubscription(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
-		if err := db.Delete(&Subscription{}, "id = ?", id).Error; err != nil {
+		if err := db.Delete(&models.Subscription{}, "id = ?", id).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}

@@ -1,10 +1,14 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/Miku7676/webhook-delivery-service/handlers"
+	"github.com/Miku7676/webhook-delivery-service/models"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"gorm.io/driver/postgres"
@@ -12,6 +16,17 @@ import (
 )
 
 func main() {
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+
+	// Run a goroutine to handle shutdown
+	go func() {
+		<-c
+		fmt.Println("Shutting down...")
+		os.Exit(0)
+	}()
+
 	// Load env vars
 	err := godotenv.Load()
 	if err != nil {
@@ -23,7 +38,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
-	database.AutoMigrate(&handlers.Subscription{}, &handlers.WebhookTask{})
+	database.AutoMigrate(&models.Subscription{}, &models.WebhookTask{}, &models.DeliveryLog{})
+
+	go startWorker() //go routine
+	go startLogClean(database)
 
 	r := gin.Default()
 
@@ -37,6 +55,8 @@ func main() {
 	r.DELETE("/subscriptions/:id", handlers.DeleteSubscription(database))
 
 	r.POST("/ingest/:subscription_id", handlers.IngestWebhook(database))
+	r.GET("/status/:webhook_id", handlers.GetDeliveryStatusByWebhook(database))
+	r.GET("/subscriptions/:id/logs", handlers.GetRecentLogsBySubscription(database))
 
 	port := os.Getenv("PORT")
 	if port == "" {
