@@ -15,7 +15,7 @@ RUN go mod download
 COPY . .
 
 # Generate Swagger docs
-RUN swag init --dir ./cmd/api,./handlers --output ./docs
+RUN swag init --dir ./cmd/api,./handlers,./models --output ./docs
 
 # Build API binary
 RUN go build -o /api ./cmd/api
