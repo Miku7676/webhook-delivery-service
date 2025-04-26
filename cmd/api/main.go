@@ -1,7 +1,8 @@
-// @title Webhook Delivery Service API
+// @title Webhook Delivery System - Gyanaranjan Bal
 // @version 1.0
-// @description API Documentation for Webhook Delivery System
-// @host localhost:8080
+// @description API Documentation for Webhook Delivery Assignment - Developed by Gyanaranjan Bal
+// @contact.name Biswajit Bal
+// @host webhook-api-wwhi.onrender.com
 // @BasePath /
 package main
 
@@ -30,6 +31,8 @@ import (
 // }
 
 func main() {
+
+	gin.SetMode(gin.ReleaseMode)
 
 	// Load env vars
 	err := godotenv.Load()
@@ -98,5 +101,5 @@ func main() {
 	}
 
 	log.Printf("Server running at http://localhost:%s\n", port)
-	r.Run(":" + port)
+	r.Run("0.0.0.0:" + port)
 }
