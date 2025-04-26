@@ -1,6 +1,6 @@
-// @title Webhook Delivery System - Gyanaranjan Bal
+// @title Webhook Delivery System - Biswajit Bal
 // @version 1.0
-// @description API Documentation for Webhook Delivery Assignment - Developed by Gyanaranjan Bal
+// @description API Documentation for Webhook Delivery Assignment - Developed by Biswajit Bal
 // @contact.name Biswajit Bal
 // @host webhook-api-wwhi.onrender.com
 // @BasePath /
@@ -100,6 +100,6 @@ func main() {
 		port = "8080"
 	}
 
-	log.Printf("Server running at http://localhost:%s\n", port)
+	// log.Printf("Server running at http://localhost:%s\n", port)
 	r.Run("0.0.0.0:" + port)
 }
