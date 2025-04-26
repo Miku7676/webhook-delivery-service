@@ -8,12 +8,21 @@ import (
 	"syscall"
 
 	"github.com/Miku7676/webhook-delivery-service/handlers"
+	"github.com/Miku7676/webhook-delivery-service/helpers"
 	"github.com/Miku7676/webhook-delivery-service/models"
 	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis/v8"
 	"github.com/joho/godotenv"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
+
+// var redisClient *redis.Client
+
+// type HandlerDependencies struct {
+// 	DB          *gorm.DB
+// 	RedisClient *redis.Client
+// }
 
 func main() {
 
@@ -40,8 +49,18 @@ func main() {
 	}
 	database.AutoMigrate(&models.Subscription{}, &models.WebhookTask{}, &models.DeliveryLog{})
 
-	go startWorker() //go routine
-	go startLogClean(database)
+	//redis
+	redisClient := redis.NewClient(&redis.Options{
+		Addr: "localhost:6379", // Local Redis
+	})
+
+	dependencyHandler := &handlers.HandlerDependencies{
+		DB:          database,
+		RedisClient: redisClient,
+	}
+
+	go helpers.StartWorker(redisClient) //go routine
+	go helpers.StartLogClean(database)
 
 	r := gin.Default()
 
@@ -49,10 +68,10 @@ func main() {
 		c.JSON(200, gin.H{"status": "up"})
 	})
 
-	r.POST("/subscriptions", handlers.CreateSubscription(database))
-	r.GET("/subscriptions/:id", handlers.GetSubscription(database))
-	r.PUT("/subscriptions/:id", handlers.UpdateSubscription(database))
-	r.DELETE("/subscriptions/:id", handlers.DeleteSubscription(database))
+	r.POST("/subscriptions", dependencyHandler.CreateSubscription())
+	r.GET("/subscriptions/:id", dependencyHandler.GetSubscription())
+	r.PUT("/subscriptions/:id", dependencyHandler.UpdateSubscription())
+	r.DELETE("/subscriptions/:id", dependencyHandler.DeleteSubscription())
 
 	r.POST("/ingest/:subscription_id", handlers.IngestWebhook(database))
 	r.GET("/status/:webhook_id", handlers.GetDeliveryStatusByWebhook(database))

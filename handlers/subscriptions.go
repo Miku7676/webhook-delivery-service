@@ -1,25 +1,24 @@
 package handlers
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/Miku7676/webhook-delivery-service/models"
 	"github.com/gin-gonic/gin"
+	"github.com/go-redis/redis/v8"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
-type Handler struct {
-	*gorm.DB
+type HandlerDependencies struct {
+	DB          *gorm.DB
+	RedisClient *redis.Client
 }
 
-// type Subscription struct {
-// 	ID        uuid.UUID `gorm:"type:uuid;primaryKey" json:"id"`
-// 	TargetURL string    `json:"target_url" binding:"required"`
-// 	Secret    string    `json:"secret"`
-// }
-
-func CreateSubscription(db *gorm.DB) gin.HandlerFunc {
+func (h *HandlerDependencies) CreateSubscription() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var sub models.Subscription
 		if err := c.ShouldBindJSON(&sub); err != nil {
@@ -27,7 +26,7 @@ func CreateSubscription(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 		sub.ID = uuid.New()
-		if err := db.Create(&sub).Error; err != nil {
+		if err := h.DB.Create(&sub).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
@@ -35,11 +34,11 @@ func CreateSubscription(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func GetSubscription(db *gorm.DB) gin.HandlerFunc {
+func (h *HandlerDependencies) GetSubscription() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 		var sub models.Subscription
-		if err := db.First(&sub, "id = ?", id).Error; err != nil {
+		if err := h.DB.First(&sub, "id = ?", id).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Subscription not found"})
 			return
 		}
@@ -47,11 +46,11 @@ func GetSubscription(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func UpdateSubscription(db *gorm.DB) gin.HandlerFunc {
+func (h *HandlerDependencies) UpdateSubscription() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 		var sub models.Subscription
-		if err := db.First(&sub, "id = ?", id).Error; err != nil {
+		if err := h.DB.First(&sub, "id = ?", id).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Subscription not found"})
 			return
 		}
@@ -62,18 +61,27 @@ func UpdateSubscription(db *gorm.DB) gin.HandlerFunc {
 		}
 		sub.TargetURL = updateData.TargetURL
 		sub.Secret = updateData.Secret
-		db.Save(&sub)
+		h.DB.Save(&sub)
+
+		// Update cache
+		subBytes, _ := json.Marshal(sub)
+		cacheKey := fmt.Sprintf("subscription:%s", sub.ID)
+		h.RedisClient.Set(c.Request.Context(), cacheKey, subBytes, time.Hour)
+
 		c.JSON(http.StatusOK, sub)
 	}
 }
 
-func DeleteSubscription(db *gorm.DB) gin.HandlerFunc {
+func (h *HandlerDependencies) DeleteSubscription() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
-		if err := db.Delete(&models.Subscription{}, "id = ?", id).Error; err != nil {
+		if err := h.DB.Delete(&models.Subscription{}, "id = ?", id).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
 		c.Status(http.StatusNoContent)
+
+		cacheKey := fmt.Sprintf("subscription:%s", id)
+		h.RedisClient.Del(c.Request.Context(), cacheKey)
 	}
 }

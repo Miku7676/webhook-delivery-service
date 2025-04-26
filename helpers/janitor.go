@@ -1,4 +1,4 @@
-package main
+package helpers
 
 import (
 	"log"
@@ -8,7 +8,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func startLogClean(db *gorm.DB) {
+func StartLogClean(db *gorm.DB) {
 	ticker := time.NewTicker(6 * time.Hour) // 1*time.hour
 	defer ticker.Stop()
 
