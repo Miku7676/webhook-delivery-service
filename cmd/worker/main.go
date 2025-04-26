@@ -13,19 +13,24 @@ import (
 )
 
 func main() {
+
+	// load .env variables
 	err := godotenv.Load()
 	if err != nil {
 		log.Println("No .env file found.")
 	}
 
+	// Load centralized configuration
 	cfg := config.Load()
 
+	// Parse Redis URL from config and create a Redis client
 	opt, err := redis.ParseURL(cfg.RedisURL)
 	if err != nil {
 		log.Fatalf("Failed to parse Redis URL: %v", err)
 	}
 	redisClient := redis.NewClient(opt)
 
+	//connect to database
 	dburl := cfg.DBURL
 	database, err := gorm.Open(postgres.Open(dburl), &gorm.Config{})
 	if err != nil {
@@ -34,9 +39,13 @@ func main() {
 
 	log.Println("Starting worker + janitor...")
 
+	// Start the background Worker to process webhook tasks
 	go helpers.StartWorker(redisClient)
+
+	// Start the background Log Cleaner
 	go helpers.StartLogClean(database)
 
+	// healthcheck endpoint
 	go func() {
 		http.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
@@ -48,5 +57,6 @@ func main() {
 		}
 	}()
 
+	// Block forever
 	select {}
 }

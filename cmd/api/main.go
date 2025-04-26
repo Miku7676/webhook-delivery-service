@@ -23,15 +23,9 @@ import (
 	"gorm.io/gorm"
 )
 
-// var redisClient *redis.Client
-
-// type HandlerDependencies struct {
-// 	DB          *gorm.DB
-// 	RedisClient *redis.Client
-// }
-
 func main() {
 
+	// setmode to release for deployment
 	gin.SetMode(gin.ReleaseMode)
 
 	// Load env vars
@@ -86,6 +80,7 @@ func main() {
 		c.JSON(200, gin.H{"status": "up"})
 	})
 
+	// API routes
 	r.POST("/subscriptions", dependencyHandler.CreateSubscription())
 	r.GET("/subscriptions/:id", dependencyHandler.GetSubscription())
 	r.PUT("/subscriptions/:id", dependencyHandler.UpdateSubscription())
@@ -100,6 +95,6 @@ func main() {
 		port = "8080"
 	}
 
-	// log.Printf("Server running at http://localhost:%s\n", port)
+	log.Printf("Server running at http://0.0.0.0:%s\n", port)
 	r.Run("0.0.0.0:" + port)
 }

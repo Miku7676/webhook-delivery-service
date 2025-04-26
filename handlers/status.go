@@ -21,6 +21,7 @@ import (
 // @Router /status/{webhook_id} [get]
 func GetDeliveryStatusByWebhook(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Extract webhook ID
 		webhookID := c.Param("webhook_id")
 
 		id, err := uuid.Parse(webhookID)
@@ -29,6 +30,7 @@ func GetDeliveryStatusByWebhook(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		// fetch logs by webhook_task_id - latest first
 		var logs []models.DeliveryLog
 		if err := db.Where("webhook_task_id = ?", id).Order("created_at asc").Find(&logs).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch logs"})
@@ -59,6 +61,7 @@ func GetRecentLogsBySubscription(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 
+		// fetches most recent logs (last 20 logs) by the subscription id
 		var logs []models.DeliveryLog
 		if err := db.Where("subscription_id = ?", id).Order("created_at desc").Limit(20).Find(&logs).Error; err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch logs"})

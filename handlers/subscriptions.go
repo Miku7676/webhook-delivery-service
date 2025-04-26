@@ -32,10 +32,14 @@ type HandlerDependencies struct {
 func (h *HandlerDependencies) CreateSubscription() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req models.CreateSubscriptionRequest
+
+		// Bind JSON payload to request struc
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+
+		//create a subscription and enter into database
 		sub := models.Subscription{
 			ID:        uuid.New(),
 			TargetURL: req.TargetURL,
@@ -62,6 +66,8 @@ func (h *HandlerDependencies) GetSubscription() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 		var sub models.Subscription
+
+		// Fetch subscription
 		if err := h.DB.First(&sub, "id = ?", id).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Subscription not found"})
 			return
@@ -86,15 +92,22 @@ func (h *HandlerDependencies) UpdateSubscription() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		id := c.Param("id")
 		var sub models.Subscription
+
+		// Fetch the existing subscription
 		if err := h.DB.First(&sub, "id = ?", id).Error; err != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Subscription not found"})
 			return
 		}
+
 		var updateData models.Subscription
+
+		// Bind JSON payload for update
 		if err := c.ShouldBindJSON(&updateData); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
+
+		// Update fields and save changes
 		sub.TargetURL = updateData.TargetURL
 		sub.Secret = updateData.Secret
 		h.DB.Save(&sub)

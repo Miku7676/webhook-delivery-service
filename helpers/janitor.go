@@ -9,15 +9,19 @@ import (
 )
 
 func StartLogClean(db *gorm.DB) {
-	ticker := time.NewTicker(6 * time.Hour) // 1*time.hour
+
+	// ticker triggers every 6 hours
+	ticker := time.NewTicker(6 * time.Hour)
 	defer ticker.Stop()
 
+	// trigger cleanup when the time finishes
 	for range ticker.C {
 		cleanupLogs(db)
 	}
 }
 
 func cleanupLogs(db *gorm.DB) {
+	// cutoff time is 24 hours
 	cutoff := time.Now().Add(-24 * time.Hour)
 	result := db.Where("created_at < ?", cutoff).Delete(&models.DeliveryLog{})
 

@@ -20,7 +20,6 @@ import (
 	"gorm.io/gorm"
 )
 
-// var redisClient *redis.Client
 type WorkerDependencies struct {
 	RedisClient *redis.Client
 }
@@ -36,6 +35,7 @@ func StartWorker(rdb *redis.Client) {
 		log.Fatalf("Failed to parse Redis URL: %v", err)
 	}
 
+	// Configure Asynq for redis
 	redisOpt := asynq.RedisClientOpt{
 		Addr:     opt.Addr,
 		Username: opt.Username,
@@ -46,21 +46,24 @@ func StartWorker(rdb *redis.Client) {
 		DB: opt.DB,
 	}
 
+	// Create Worker dependency instance
 	deps := &WorkerDependencies{
 		RedisClient: rdb,
 	}
 
+	// Setup Asynq server
 	srv := asynq.NewServer(
 		redisOpt,
 		asynq.Config{
 			Concurrency: 5, // 5 concurrent workers
 			Queues: map[string]int{
-				"default": 10,
+				"default": 10, // Queue configuration
 			},
-			RetryDelayFunc: asynq.DefaultRetryDelayFunc,
+			RetryDelayFunc: asynq.DefaultRetryDelayFunc, // Exponential backoff for retries - builtin function
 		},
 	)
 
+	// setup taskhandler multiplexer
 	mux := asynq.NewServeMux()
 	mux.HandleFunc("webhook:deliver", deps.processWebhookTask)
 
@@ -86,6 +89,7 @@ func (wd *WorkerDependencies) processWebhookTask(ctx context.Context, task *asyn
 	var sub models.Subscription
 	cacheKey := fmt.Sprintf("subscription:%s", webhookTask.SubscriptionID)
 
+	// fetch subscription from redis
 	val, err := wd.RedisClient.Get(ctx, cacheKey).Result()
 	if err == redis.Nil {
 		// Cache miss - fetch from DB
@@ -94,10 +98,11 @@ func (wd *WorkerDependencies) processWebhookTask(ctx context.Context, task *asyn
 			return err
 		}
 
-		// Cache it
+		// Cache subscription
 		subBytes, _ := json.Marshal(sub)
 		wd.RedisClient.Set(ctx, cacheKey, subBytes, time.Hour)
 	} else if err != nil {
+		//cache error
 		log.Printf("Failed to get subscription from cache: %v", err)
 		return err
 	} else {
@@ -105,6 +110,7 @@ func (wd *WorkerDependencies) processWebhookTask(ctx context.Context, task *asyn
 		json.Unmarshal([]byte(val), &sub)
 	}
 
+	// Prepare HTTP client and request
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := http.NewRequest("POST", sub.TargetURL, bytes.NewBuffer([]byte(webhookTask.Payload)))
 	if err != nil {
@@ -115,6 +121,7 @@ func (wd *WorkerDependencies) processWebhookTask(ctx context.Context, task *asyn
 	}
 	req.Header.Set("Content-Type", "application/json")
 
+	// Send HTTP request to subscription url
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Printf("Delivery failed: %v", err)
@@ -124,6 +131,7 @@ func (wd *WorkerDependencies) processWebhookTask(ctx context.Context, task *asyn
 	}
 	defer resp.Body.Close()
 
+	// Handle HTTP response
 	status := "Success"
 	errorMessage := ""
 	if resp.StatusCode >= 300 {
@@ -146,6 +154,7 @@ func (wd *WorkerDependencies) processWebhookTask(ctx context.Context, task *asyn
 	return nil
 }
 
+// logAttempt records a delivery attempt into the DeliveryLog table
 func logAttempt(db *gorm.DB, task models.WebhookTask, sub models.Subscription, attempt int, status string, httpStatus int, errMsg string) {
 	logEntry := models.DeliveryLog{
 		ID:             uuid.New(),
