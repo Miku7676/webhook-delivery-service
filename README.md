@@ -313,6 +313,7 @@ Redis reduces database load and speeds up retrieval.
 #  Important Notes And Assumptions
 
 - **Cold Starts**: Since using Free Tier on Render, services may sleep after inactivity, causing cold starts (~3-5 seconds) when triggered again.
+- !!! Added a cronjob to ping the worker every 10 mins. If it is still down goto [`https://webhook-worker-lfbp.onrender.com/healthz`](https://webhook-worker-lfbp.onrender.com/healthz)
 - No Tests were included. Tests performed using custom curl scripts and Webhook.site.
 - For the current expected traffic (5000 webhooks/day), the Free Tier is **sufficient and sustainable**.
 - All payloads are assumed to be json format.
