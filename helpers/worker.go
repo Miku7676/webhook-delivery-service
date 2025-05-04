@@ -23,25 +23,7 @@ type WorkerDependencies struct {
 	RedisClient *redis.Client
 }
 
-func StartWorker(rdb *redis.Client) {
-	redisUrl := os.Getenv("REDIS_URL")
-	if redisUrl == "" {
-		log.Fatal("REDIS_URL environment variable not set")
-	}
-
-	opt, err := redis.ParseURL(redisUrl)
-	if err != nil {
-		log.Fatalf("Failed to parse Redis URL: %v", err)
-	}
-
-	// Configure Asynq for redis
-	redisOpt := asynq.RedisClientOpt{
-		Addr:     opt.Addr,
-		Username: opt.Username,
-		Password: opt.Password,
-		TLSConfig: opt.TLSConfig,
-		DB: opt.DB,
-	}
+func StartWorker(rdb *redis.Client, redisOpt asynq.RedisClientOpt) {
 
 	// Create Worker dependency instance
 	deps := &WorkerDependencies{

@@ -4,6 +4,7 @@
 // @contact.name Biswajit Bal
 // @host webhook-api-wwhi.onrender.com
 // @BasePath /
+// @schemes https
 package main
 
 import (
@@ -16,7 +17,6 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/go-redis/redis/v8"
-	"github.com/joho/godotenv"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"gorm.io/driver/postgres"
@@ -28,11 +28,6 @@ func main() {
 	// setmode to release for deployment
 	gin.SetMode(gin.ReleaseMode)
 
-	// Load env vars
-	err := godotenv.Load()
-	if err != nil {
-		log.Println("No .env file found.")
-	}
 
 	// Load centralized configuration
 	cfg := config.Load()

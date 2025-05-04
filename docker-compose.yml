@@ -26,7 +26,7 @@ services:
     environment:
       - DB_URL=postgres://postgres:thepassword@db:5432/webhook_service?sslmode=disable
       - PORT=8080
-      - REDIS_URL=redis:6379
+      - REDIS_URL=redis://redis:6379
     command: ["/api"]
 
   worker:
@@ -37,7 +37,7 @@ services:
       - redis
     environment:
       - DB_URL=postgres://postgres:thepassword@db:5432/webhook_service?sslmode=disable
-      - REDIS_URL=redis:6379
+      - REDIS_URL=redis://redis:6379
     command: ["/worker"]
 
 volumes:

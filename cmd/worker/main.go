@@ -7,18 +7,13 @@ import (
 	"github.com/Miku7676/webhook-delivery-service/config"
 	"github.com/Miku7676/webhook-delivery-service/helpers"
 	"github.com/go-redis/redis/v8"
-	"github.com/joho/godotenv"
+	"github.com/hibiken/asynq"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
 func main() {
 
-	// load .env variables
-	err := godotenv.Load()
-	if err != nil {
-		log.Println("No .env file found.")
-	}
 
 	// Load centralized configuration
 	cfg := config.Load()
@@ -29,6 +24,13 @@ func main() {
 		log.Fatalf("Failed to parse Redis URL: %v", err)
 	}
 	redisClient := redis.NewClient(opt)
+	redisOpt := asynq.RedisClientOpt{
+		Addr:     opt.Addr,
+		Username: opt.Username,
+		Password: opt.Password,
+		TLSConfig: opt.TLSConfig,
+		DB: opt.DB,
+	}
 
 	//connect to database
 	dburl := cfg.DBURL
@@ -40,7 +42,7 @@ func main() {
 	log.Println("Starting worker + janitor...")
 
 	// Start the background Worker to process webhook tasks
-	go helpers.StartWorker(redisClient)
+	go helpers.StartWorker(redisClient,redisOpt)
 
 	// Start the background Log Cleaner
 	go helpers.StartLogClean(database)
