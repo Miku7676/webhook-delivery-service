@@ -3,7 +3,6 @@ package helpers
 import (
 	"bytes"
 	"context"
-	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -40,9 +39,7 @@ func StartWorker(rdb *redis.Client) {
 		Addr:     opt.Addr,
 		Username: opt.Username,
 		Password: opt.Password,
-		TLSConfig: &tls.Config{
-			InsecureSkipVerify: false,
-		},
+		TLSConfig: opt.TLSConfig,
 		DB: opt.DB,
 	}
 
