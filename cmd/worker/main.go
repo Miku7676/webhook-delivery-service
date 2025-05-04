@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"log"
 	"net/http"
 
@@ -28,6 +29,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to parse Redis URL: %v", err)
 	}
+	opt.TLSConfig = &tls.Config{}
 	redisClient := redis.NewClient(opt)
 
 	//connect to database
