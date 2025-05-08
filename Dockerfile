@@ -26,7 +26,7 @@ RUN go build -o /worker ./cmd/worker
 # Stage 2: Run
 FROM alpine:latest
 
-RUN apk add --no-cache ca-certificates
+RUN apk add --no-cache ca-certificates postgresql-client bash
 
 WORKDIR /app
 
@@ -35,6 +35,10 @@ COPY --from=builder /worker /worker
 
 # Copy Swagger docs
 COPY --from=builder /app/docs /docs
+
+# Copy wait-for-postgres.sh
+COPY wait-for-db.sh /app/wait-for-db.sh
+RUN chmod +x /app/wait-for-db.sh
 
 EXPOSE 8080
 
